@@ -138,6 +138,22 @@ def main():
         logger.error("GitHub API не відповів вчасно")
         print("\n❌ GitHub API не відповів вчасно (timeout). Спробуй ще раз.")
 
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else None
+        if status == 403:
+            logger.error("GitHub API: перевищено ліміт запитів без токена")
+            print(
+                "\n❌ GitHub API повернув 403 - найімовірніше, перевищено ліміт "
+                "60 запитів/год без токена. Зачекай трохи, або додай GitHub "
+                "Personal Access Token для вищого ліміту."
+            )
+        elif status == 429:
+            logger.error("Перевищено rate limit API")
+            print("\n❌ Перевищено ліміт запитів (429). Зачекай хвилину і спробуй ще раз.")
+        else:
+            logger.error(f"HTTP помилка {status}: {e}")
+            print(f"\n❌ HTTP помилка від API ({status}): {e}")
+
     except Exception as e:
         # Все інше (помилки Groq API, несподівані збої тощо) - не приховуємо,
         # але хоча б логуємо з повним типом помилки для діагностики.
