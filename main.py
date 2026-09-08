@@ -14,7 +14,10 @@ get_file_content для конкретних файлів), а не викону
     python main.py
 """
 
+import logging
 import os
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,6 +26,12 @@ from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
 from github_tools import get_repo_info, list_repo_files, get_file_content
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """Ти - досвідчений технічний рев'ювер, що аналізує
 pet-проєкти на GitHub так, як це робить технічний лід перед прийняттям
@@ -95,16 +104,41 @@ def main():
         print("Посилання не вказано, завершую роботу.")
         return
 
+    logger.info(f"Починаю аналіз репозиторію: {repo_url}")
     print(f"\nАналізую {repo_url}...\n")
     print("(агент сам вирішує, які інструменти викликати - це може зайняти кілька запитів)\n")
 
     try:
         feedback = analyze_repo(repo_url)
+        logger.info("Аналіз завершено успішно")
         print("=" * 60)
         print(feedback)
         print("=" * 60)
+
+    except RuntimeError as e:
+        # Відсутній GROQ_API_KEY - див. build_agent()
+        logger.error(f"Помилка конфігурації: {e}")
+        print(f"\n❌ Помилка конфігурації: {e}")
+
+    except ValueError as e:
+        # Некоректний формат посилання - див. _parse_repo_url()
+        logger.error(f"Некоректне посилання: {e}")
+        print(f"\n❌ Некоректне посилання на репозиторій: {e}")
+
+    except requests.exceptions.ConnectionError:
+        logger.error("Немає з'єднання з інтернетом")
+        print("\n❌ Немає з'єднання з інтернетом. Перевір мережу і спробуй ще раз.")
+
+    except requests.exceptions.Timeout:
+        logger.error("GitHub API не відповів вчасно")
+        print("\n❌ GitHub API не відповів вчасно (timeout). Спробуй ще раз.")
+
     except Exception as e:
-        print(f"\n❌ Помилка під час аналізу: {e}")
+        # Все інше (помилки Groq API, несподівані збої тощо) - не приховуємо,
+        # але хоча б логуємо з повним типом помилки для діагностики.
+        logger.error(f"Неочікувана помилка ({type(e).__name__}): {e}")
+        print(f"\n❌ Неочікувана помилка ({type(e).__name__}): {e}")
+        print("Якщо це повторюється - перевір GROQ_API_KEY та ліміти на console.groq.com")
 
 
 if __name__ == "__main__":

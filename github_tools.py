@@ -12,13 +12,15 @@
 
 import base64
 import re
+from typing import Any, Dict, List, Tuple
+
 import requests
 from langchain_core.tools import tool
 
 GITHUB_API = "https://api.github.com"
 
 
-def _parse_repo_url(url_or_path: str) -> tuple[str, str]:
+def _parse_repo_url(url_or_path: str) -> Tuple[str, str]:
     """Витягує (owner, repo) з різних форматів посилання на GitHub.
 
     Приймає:
@@ -51,7 +53,7 @@ def get_repo_info(repo_url: str) -> str:
         return f"Помилка: репозиторій '{owner}/{repo}' не знайдено (можливо, приватний або не існує)."
     response.raise_for_status()
 
-    data = response.json()
+    data: Dict[str, Any] = response.json()
     return (
         f"Назва: {data.get('full_name')}\n"
         f"Опис: {data.get('description') or '(немає опису)'}\n"
@@ -77,11 +79,11 @@ def list_repo_files(repo_url: str, path: str = "") -> str:
         return f"Помилка: шлях '{path}' не знайдено в репозиторії."
     response.raise_for_status()
 
-    items = response.json()
+    items: List[Dict[str, Any]] = response.json()
     if not isinstance(items, list):
         return f"'{path}' - це файл, а не папка. Використай get_file_content."
 
-    lines = []
+    lines: List[str] = []
     for item in items:
         marker = "📁" if item["type"] == "dir" else "📄"
         lines.append(f"{marker} {item['name']}")
@@ -104,7 +106,7 @@ def get_file_content(repo_url: str, file_path: str) -> str:
         return f"Помилка: файл '{file_path}' не знайдено."
     response.raise_for_status()
 
-    data = response.json()
+    data: Dict[str, Any] = response.json()
     if data.get("encoding") != "base64":
         return f"Не вдалось прочитати файл '{file_path}' (незвичне кодування)."
 
