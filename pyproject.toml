@@ -1,0 +1,35 @@
+[project]
+name = "github-portfolio-critic-agent"
+version = "0.1.0"
+description = "AI tool-calling agent (LangGraph, ReAct pattern) that analyzes public GitHub repositories and gives structured technical feedback"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ruslan Shevchuk" }]
+dependencies = [
+    "langgraph==0.2.60",
+    "langchain==0.3.13",
+    "langchain-groq==0.2.3",
+    "requests==2.32.3",
+    "python-dotenv==1.0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.8"]
+
+[project.scripts]
+github-critic-agent = "main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+# BLE001 (catching bare Exception) навмисно НЕ увімкнено як обов'язкове
+# правило: у main.py останній except Exception - свідомий fallback для
+# непередбачених помилок (Groq API тощо), з детальним логуванням типу
+# помилки, а не приховане "проковтування" винятків.

@@ -9,7 +9,7 @@ GitHub API tools реально працюють на живому інтерн�
     python test_tools_manually.py
 """
 
-from github_tools import get_repo_info, list_repo_files, get_file_content
+from github_tools import get_file_content, get_repo_info, list_repo_files
 
 # Тест на реальному, публічному репозиторії - НЕ твій, а маленький
 # офіційний приклад від GitHub, щоб перевірити базову працездатність

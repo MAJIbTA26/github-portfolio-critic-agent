@@ -16,16 +16,16 @@ get_file_content для конкретних файлів), а не викону
 
 import logging
 import os
+from typing import Any
 
 import requests
 from dotenv import load_dotenv
-
-load_dotenv()
-
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
-from github_tools import get_repo_info, list_repo_files, get_file_content
+from github_tools import get_file_content, get_repo_info, list_repo_files
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +60,21 @@ pet-проєкти на GitHub так, як це робить технічний
 вище - обмежена кількість викликів інструментів є навмисною."""
 
 
-def build_agent():
+def build_agent() -> Any:
+    """Створює ReAct-агента (LangGraph) з набором GitHub-інструментів.
+
+    Тип повернення анотований як Any навмисно: точний клас, який
+    повертає create_react_agent (CompiledStateGraph), відрізняється
+    між версіями langgraph, і жорстка типізація тут ризикує зламатись
+    при оновленні бібліотеки - той самий клас проблем, з яким ми вже
+    стикались (deprecated параметр 'prompt' в іншій версії langgraph).
+
+    Returns:
+        Скомпільований LangGraph-агент, готовий до виклику через .invoke().
+
+    Raises:
+        RuntimeError: якщо змінна середовища GROQ_API_KEY не задана.
+    """
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -83,6 +97,20 @@ def build_agent():
 
 
 def analyze_repo(repo_url: str) -> str:
+    """Запускає повний цикл аналізу репозиторію через ReAct-агента.
+
+    Args:
+        repo_url: Посилання на GitHub-репозиторій (owner/repo або повний URL).
+
+    Returns:
+        Текстовий фідбек від агента (сильні сторони, що покращити,
+        загальна оцінка).
+
+    Raises:
+        RuntimeError: якщо GROQ_API_KEY не задано (з build_agent).
+        Різні винятки requests/langchain можуть пробитись сюди з
+        внутрішніх викликів LLM API - їх ловить main().
+    """
     agent = build_agent()
 
     result = agent.invoke(
@@ -101,7 +129,10 @@ def analyze_repo(repo_url: str) -> str:
     return final_message.content
 
 
-def main():
+def main() -> None:
+    """Точка входу: запитує посилання на репозиторій у користувача,
+    запускає аналіз через analyze_repo(), і виводить результат або
+    зрозуміле повідомлення про конкретний тип помилки."""
     print("=== GitHub Portfolio Critic Agent ===\n")
     repo_url = input("Встав посилання на GitHub-репозиторій: ").strip()
 
