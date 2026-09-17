@@ -175,7 +175,7 @@ def test_get_file_content_truncates_long_files(mock_get):
     """Перевіряємо, що занадто довгі файли обрізаються."""
     import base64
 
-    long_text = "x" * 5000  # довше за MAX_FILE_CHARS (3000)
+    long_text = "x" * 6000  # довше за MAX_FILE_CHARS (5000)
     encoded = base64.b64encode(long_text.encode("utf-8")).decode("ascii")
 
     mock_response = Mock()
@@ -185,5 +185,5 @@ def test_get_file_content_truncates_long_files(mock_get):
 
     result = get_file_content.invoke({"repo_url": "MAJIbTA26/test-repo", "file_path": "big_file.py"})
 
-    assert len(result) < 5000
-    assert "обрізано" in result
+    assert len(result) < len(long_text)  # результат коротший за оригінал
+    assert "обрізано" in result  # і містить позначку про обрізання
