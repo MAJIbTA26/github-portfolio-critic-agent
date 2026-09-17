@@ -24,6 +24,7 @@ trade-off: агент бачить структуру коду й логіку �
 
 import ast
 import base64
+import json
 import re
 from typing import Any
 
@@ -105,6 +106,131 @@ def _strip_docstrings(source: str) -> str:
         return ast.unparse(tree)
     except Exception:
         return source
+
+
+def _analyze_python_file(filename: str, source: str) -> dict[str, Any]:
+    """Аналізує один Python-файл через AST і повертає компактні
+    метрики якості коду - БЕЗ виклику LLM, тільки статичний аналіз.
+
+    Це ключова частина Map-Reduce підходу: замість того щоб надсилати
+    LLM повний вміст кожного файлу (дорого за токенами, і розмір росте
+    лінійно з розміром файлу), рахуємо метрики локально, і розмір
+    результату залишається компактним НЕЗАЛЕЖНО від розміру файлу.
+
+    Args:
+        filename: Назва файлу (для ідентифікації в результаті).
+        source: Вихідний Python-код як текст.
+
+    Returns:
+        Словник з метриками: кількість рядків/функцій/класів, відсоток
+        функцій з докстрінгами/type hints, чи є logging/try-except.
+        Якщо файл невалідний Python - повертає {"filename": ..., "error": ...}.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as e:
+        return {"filename": filename, "error": f"SyntaxError: {e}"}
+
+    functions = []
+    classes = []
+    has_logging_import = False
+    has_try_except = False
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "logging":
+                    has_logging_import = True
+        if isinstance(node, ast.Try):
+            has_try_except = True
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            has_docstring = bool(
+                node.body
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+                and isinstance(node.body[0].value.value, str)
+            )
+            has_type_hints = node.returns is not None or any(
+                arg.annotation is not None for arg in node.args.args
+            )
+            functions.append({
+                "name": node.name,
+                "has_docstring": has_docstring,
+                "has_type_hints": has_type_hints,
+            })
+        if isinstance(node, ast.ClassDef):
+            classes.append(node.name)
+
+    total_funcs = len(functions)
+    funcs_with_docstrings = sum(1 for f in functions if f["has_docstring"])
+    funcs_with_types = sum(1 for f in functions if f["has_type_hints"])
+
+    return {
+        "filename": filename,
+        "lines_of_code": len(source.splitlines()),
+        "functions_count": total_funcs,
+        "classes_count": len(classes),
+        "docstring_coverage_pct": (
+            round(funcs_with_docstrings / total_funcs * 100) if total_funcs else None
+        ),
+        "type_hints_coverage_pct": (
+            round(funcs_with_types / total_funcs * 100) if total_funcs else None
+        ),
+        "has_logging": has_logging_import,
+        "has_try_except": has_try_except,
+        "function_names": [f["name"] for f in functions],
+    }
+
+
+@tool
+def get_project_metrics(repo_url: str) -> str:
+    """Аналізує ВСІ .py файли в корені репозиторію ОДНИМ викликом:
+    докстрінги, типізація, логування, обробка помилок. Виклич це
+    замість get_file_content, щоб побачити весь проєкт компактно."""
+    try:
+        owner, repo = _parse_repo_url(repo_url)
+        response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}/contents/")
+
+        if response.status_code == 404:
+            return f"Помилка: репозиторій '{owner}/{repo}' не знайдено."
+        if response.status_code == 403:
+            return "Помилка: перевищено ліміт запитів до GitHub API (403)."
+        response.raise_for_status()
+
+        items: list[dict[str, Any]] = response.json()
+        py_files = [
+            item["name"] for item in items
+            if item.get("type") == "file" and item["name"].endswith(".py")
+        ]
+
+        if not py_files:
+            return "У кореневій папці немає .py файлів."
+
+        all_metrics = []
+        for filename in py_files:
+            file_response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}/contents/{filename}")
+            if file_response.status_code != 200:
+                all_metrics.append({"filename": filename, "error": "не вдалось завантажити"})
+                continue
+
+            file_data: dict[str, Any] = file_response.json()
+            if file_data.get("encoding") != "base64":
+                continue
+
+            content = base64.b64decode(file_data["content"]).decode("utf-8", errors="replace")
+            metrics = _analyze_python_file(filename, content)
+            all_metrics.append(metrics)
+
+        return json.dumps(all_metrics, ensure_ascii=False, indent=2)
+
+    except ValueError as e:
+        return f"Помилка формату посилання: {e}"
+    except requests.exceptions.ConnectionError:
+        return "Помилка: немає з'єднання з інтернетом."
+    except requests.exceptions.Timeout:
+        return "Помилка: GitHub API не відповів вчасно (timeout)."
+    except requests.exceptions.HTTPError as e:
+        return f"Помилка HTTP від GitHub API: {e}"
 
 
 @tool
