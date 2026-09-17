@@ -27,7 +27,7 @@ from langchain_core.tools import tool
 
 GITHUB_API = "https://api.github.com"
 REQUEST_TIMEOUT_SECONDS = 15
-MAX_FILE_CHARS = 4000
+MAX_FILE_CHARS = 2200
 
 
 def _parse_repo_url(url_or_path: str) -> tuple[str, str]:
