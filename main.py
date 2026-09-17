@@ -121,7 +121,13 @@ def analyze_repo(repo_url: str) -> str:
         config={"recursion_limit": 50},
     )
 
-    final_message = result["messages"][-1]
+    final_message = result["messages"][-1] if result.get("messages") else None
+    if final_message is None or not getattr(final_message, "content", None):
+        raise RuntimeError(
+            "Агент завершив роботу, але не повернув жодної текстової відповіді "
+            "(порожній result['messages'] або відсутній content). Спробуй ще раз, "
+            "або перевір, чи не замалий max_tokens для reasoning-моделі."
+        )
     return final_message.content
 
 

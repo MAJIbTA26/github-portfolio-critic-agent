@@ -29,7 +29,8 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
-# BLE001 (catching bare Exception) навмисно НЕ увімкнено як обов'язкове
-# правило: у main.py останній except Exception - свідомий fallback для
-# непередбачених помилок (Groq API тощо), з детальним логуванням типу
-# помилки, а не приховане "проковтування" винятків.
+# BLE001 (catching bare Exception) та SIM102 (nested if) НЕ увімкнені:
+# у main.py останній except Exception - свідомий fallback для
+# непередбачених помилок (з детальним логуванням типу помилки), а
+# вкладені if у _strip_docstrings - навмисно роздільні для читабельності
+# складної AST-перевірки.

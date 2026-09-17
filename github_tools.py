@@ -25,7 +25,7 @@ trade-off: агент бачить структуру коду й логіку �
 import ast
 import base64
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import requests
 from langchain_core.tools import tool
@@ -35,7 +35,7 @@ REQUEST_TIMEOUT_SECONDS = 15
 MAX_FILE_CHARS = 5000
 
 
-def _parse_repo_url(url_or_path: str) -> Tuple[str, str]:
+def _parse_repo_url(url_or_path: str) -> tuple[str, str]:
     """Витягує (owner, repo) з різних форматів посилання на GitHub.
 
     Args:
@@ -121,7 +121,7 @@ def get_repo_info(repo_url: str) -> str:
             return "Помилка: перевищено ліміт запитів до GitHub API (403). Спробуй пізніше."
         response.raise_for_status()
 
-        data: Dict[str, Any] = response.json()
+        data: dict[str, Any] = response.json()
         return (
             f"Назва: {data.get('full_name')}\n"
             f"Опис: {data.get('description') or '(немає опису)'}\n"
@@ -155,11 +155,11 @@ def list_repo_files(repo_url: str, path: str = "") -> str:
             return "Помилка: перевищено ліміт запитів до GitHub API (403). Спробуй пізніше."
         response.raise_for_status()
 
-        items: List[Dict[str, Any]] = response.json()
+        items: list[dict[str, Any]] = response.json()
         if not isinstance(items, list):
             return f"'{path}' - це файл, а не папка. Використай get_file_content."
 
-        lines: List[str] = []
+        lines: list[str] = []
         for item in items:
             marker = "📁" if item["type"] == "dir" else "📄"
             lines.append(f"{marker} {item['name']}")
@@ -189,7 +189,7 @@ def get_file_content(repo_url: str, file_path: str) -> str:
             return "Помилка: перевищено ліміт запитів до GitHub API (403). Спробуй пізніше."
         response.raise_for_status()
 
-        data: Dict[str, Any] = response.json()
+        data: dict[str, Any] = response.json()
         if data.get("encoding") != "base64":
             return f"Не вдалось прочитати файл '{file_path}' (незвичне кодування)."
 
