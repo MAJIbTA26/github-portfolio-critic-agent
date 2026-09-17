@@ -146,7 +146,7 @@ def _analyze_python_file(filename: str, source: str) -> dict[str, Any]:
                     has_logging_import = True
         if isinstance(node, ast.Try):
             has_try_except = True
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, ast.Import | ast.ImportFrom):
             has_docstring = bool(
                 node.body
                 and isinstance(node.body[0], ast.Expr)
