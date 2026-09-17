@@ -25,11 +25,14 @@ trade-off: агент бачить структуру коду й логіку �
 import ast
 import base64
 import json
+import logging
 import re
 from typing import Any
 
 import requests
 from langchain_core.tools import tool
+
+logger = logging.getLogger(__name__)
 
 GITHUB_API = "https://api.github.com"
 REQUEST_TIMEOUT_SECONDS = 15
@@ -189,11 +192,14 @@ def get_project_metrics(repo_url: str) -> str:
     замість get_file_content, щоб побачити весь проєкт компактно."""
     try:
         owner, repo = _parse_repo_url(repo_url)
+        logger.info(f"get_project_metrics: аналізую {owner}/{repo}")
         response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}/contents/")
 
         if response.status_code == 404:
+            logger.warning(f"get_project_metrics: репозиторій {owner}/{repo} не знайдено")
             return f"Помилка: репозиторій '{owner}/{repo}' не знайдено."
         if response.status_code == 403:
+            logger.warning("get_project_metrics: перевищено ліміт запитів GitHub API")
             return "Помилка: перевищено ліміт запитів до GitHub API (403)."
         response.raise_for_status()
 
@@ -204,12 +210,14 @@ def get_project_metrics(repo_url: str) -> str:
         ]
 
         if not py_files:
+            logger.info(f"get_project_metrics: у {owner}/{repo} немає .py файлів у корені")
             return "У кореневій папці немає .py файлів."
 
         all_metrics = []
         for filename in py_files:
             file_response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}/contents/{filename}")
             if file_response.status_code != 200:
+                logger.warning(f"get_project_metrics: не вдалось завантажити {filename}")
                 all_metrics.append({"filename": filename, "error": "не вдалось завантажити"})
                 continue
 
@@ -221,15 +229,20 @@ def get_project_metrics(repo_url: str) -> str:
             metrics = _analyze_python_file(filename, content)
             all_metrics.append(metrics)
 
+        logger.info(f"get_project_metrics: успішно проаналізовано {len(all_metrics)} файлів")
         return json.dumps(all_metrics, ensure_ascii=False, indent=2)
 
     except ValueError as e:
+        logger.error(f"get_project_metrics: помилка формату посилання: {e}")
         return f"Помилка формату посилання: {e}"
     except requests.exceptions.ConnectionError:
+        logger.error("get_project_metrics: немає з'єднання з інтернетом")
         return "Помилка: немає з'єднання з інтернетом."
     except requests.exceptions.Timeout:
+        logger.error("get_project_metrics: GitHub API timeout")
         return "Помилка: GitHub API не відповів вчасно (timeout)."
     except requests.exceptions.HTTPError as e:
+        logger.error(f"get_project_metrics: HTTP помилка: {e}")
         return f"Помилка HTTP від GitHub API: {e}"
 
 
@@ -242,12 +255,15 @@ def get_repo_info(repo_url: str) -> str:
         response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}")
 
         if response.status_code == 404:
+            logger.warning(f"get_repo_info: репозиторій {owner}/{repo} не знайдено")
             return f"Помилка: репозиторій '{owner}/{repo}' не знайдено (можливо, приватний або не існує)."
         if response.status_code == 403:
+            logger.warning("get_repo_info: перевищено ліміт запитів GitHub API")
             return "Помилка: перевищено ліміт запитів до GitHub API (403). Спробуй пізніше."
         response.raise_for_status()
 
         data: dict[str, Any] = response.json()
+        logger.info(f"get_repo_info: успішно отримано інфо про {owner}/{repo}")
         return (
             f"Назва: {data.get('full_name')}\n"
             f"Опис: {data.get('description') or '(немає опису)'}\n"
@@ -258,12 +274,16 @@ def get_repo_info(repo_url: str) -> str:
         )
 
     except ValueError as e:
+        logger.error(f"get_repo_info: помилка формату посилання: {e}")
         return f"Помилка формату посилання: {e}"
     except requests.exceptions.ConnectionError:
+        logger.error("get_repo_info: немає з'єднання з інтернетом")
         return "Помилка: немає з'єднання з інтернетом."
     except requests.exceptions.Timeout:
+        logger.error("get_repo_info: GitHub API timeout")
         return "Помилка: GitHub API не відповів вчасно (timeout)."
     except requests.exceptions.HTTPError as e:
+        logger.error(f"get_repo_info: HTTP помилка: {e}")
         return f"Помилка HTTP від GitHub API: {e}"
 
 
@@ -276,8 +296,10 @@ def list_repo_files(repo_url: str, path: str = "") -> str:
         response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}")
 
         if response.status_code == 404:
+            logger.warning(f"list_repo_files: шлях '{path}' не знайдено в {owner}/{repo}")
             return f"Помилка: шлях '{path}' не знайдено в репозиторії."
         if response.status_code == 403:
+            logger.warning("list_repo_files: перевищено ліміт запитів GitHub API")
             return "Помилка: перевищено ліміт запитів до GitHub API (403). Спробуй пізніше."
         response.raise_for_status()
 
@@ -289,15 +311,20 @@ def list_repo_files(repo_url: str, path: str = "") -> str:
         for item in items:
             marker = "📁" if item["type"] == "dir" else "📄"
             lines.append(f"{marker} {item['name']}")
+        logger.info(f"list_repo_files: знайдено {len(lines)} елементів у {owner}/{repo}/{path}")
         return "\n".join(lines) if lines else "(порожня папка)"
 
     except ValueError as e:
+        logger.error(f"list_repo_files: помилка формату посилання: {e}")
         return f"Помилка формату посилання: {e}"
     except requests.exceptions.ConnectionError:
+        logger.error("list_repo_files: немає з'єднання з інтернетом")
         return "Помилка: немає з'єднання з інтернетом."
     except requests.exceptions.Timeout:
+        logger.error("list_repo_files: GitHub API timeout")
         return "Помилка: GitHub API не відповів вчасно (timeout)."
     except requests.exceptions.HTTPError as e:
+        logger.error(f"list_repo_files: HTTP помилка: {e}")
         return f"Помилка HTTP від GitHub API: {e}"
 
 
@@ -310,13 +337,16 @@ def get_file_content(repo_url: str, file_path: str) -> str:
         response = _safe_get(f"{GITHUB_API}/repos/{owner}/{repo}/contents/{file_path}")
 
         if response.status_code == 404:
+            logger.warning(f"get_file_content: файл '{file_path}' не знайдено в {owner}/{repo}")
             return f"Помилка: файл '{file_path}' не знайдено."
         if response.status_code == 403:
+            logger.warning("get_file_content: перевищено ліміт запитів GitHub API")
             return "Помилка: перевищено ліміт запитів до GitHub API (403). Спробуй пізніше."
         response.raise_for_status()
 
         data: dict[str, Any] = response.json()
         if data.get("encoding") != "base64":
+            logger.warning(f"get_file_content: незвичне кодування у '{file_path}'")
             return f"Не вдалось прочитати файл '{file_path}' (незвичне кодування)."
 
         content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
@@ -325,15 +355,22 @@ def get_file_content(repo_url: str, file_path: str) -> str:
             content = _strip_docstrings(content)
 
         if len(content) > MAX_FILE_CHARS:
+            logger.info(f"get_file_content: '{file_path}' обрізано ({len(content)} -> {MAX_FILE_CHARS} символів)")
             content = content[:MAX_FILE_CHARS] + "\n... (файл обрізано, занадто довгий)"
+        else:
+            logger.info(f"get_file_content: успішно отримано '{file_path}' ({len(content)} символів)")
 
         return content
 
     except ValueError as e:
+        logger.error(f"get_file_content: помилка формату посилання: {e}")
         return f"Помилка формату посилання: {e}"
     except requests.exceptions.ConnectionError:
+        logger.error("get_file_content: немає з'єднання з інтернетом")
         return "Помилка: немає з'єднання з інтернетом."
     except requests.exceptions.Timeout:
+        logger.error("get_file_content: GitHub API timeout")
         return "Помилка: GitHub API не відповів вчасно (timeout)."
     except requests.exceptions.HTTPError as e:
+        logger.error(f"get_file_content: HTTP помилка: {e}")
         return f"Помилка HTTP від GitHub API: {e}"
